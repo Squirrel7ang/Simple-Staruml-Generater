@@ -13,6 +13,8 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.ast.type.Type;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -22,14 +24,20 @@ public class ProjectParser {
     private final ArrayList<CompilationUnit> asts = new ArrayList<>();
     private final ArrayList<ClassOrInterfaceDeclaration> classOrInterfaces = new ArrayList<>();
     private final HashMap<String, String> nameToId;
-    private final HashMap<String, String> idToName;
-    private final ArrayList<Trible> triggers;
+    private final HashMap<String, JSONObject> nameToJson;
+    private final ArrayList<Duo<String, String>> generalizations;
+    private final ArrayList<Duo<String, String>> realizations;
+    private final ArrayList<Duo<String, String>> aggregations;
+    private final ArrayList<Trio<String, String, String>> triggers;
 
     public ProjectParser(String path) {
         File file = new File(path);
         srcDir = file;
         nameToId = new HashMap<>();
-        idToName = new HashMap<>();
+        nameToJson = new HashMap<>();
+        generalizations = new ArrayList<>();
+        realizations = new ArrayList<>();
+        aggregations = new ArrayList<>();
         triggers = new ArrayList<>();
         walk(file);
         convertToJp();
@@ -38,7 +46,10 @@ public class ProjectParser {
     public ProjectParser(File file) {
         srcDir = file;
         nameToId = new HashMap<>();
-        idToName = new HashMap<>();
+        nameToJson = new HashMap<>();
+        generalizations = new ArrayList<>();
+        realizations = new ArrayList<>();
+        aggregations = new ArrayList<>();
         triggers = new ArrayList<>();
         walk(file);
         convertToJp();
@@ -139,7 +150,7 @@ public class ProjectParser {
         JSONArray vertices = new JSONArray();
         JSONArray transitions = new JSONArray();
         HashMap<String, String> map = new HashMap<>(); // from nodeName to id;
-        for (Trible tri: triggers) {
+        for (Trio tri: triggers) {
             String from = (String) tri.getX();
             String to = (String) tri.getY();
             String methodName = (String) tri.getZ();
@@ -229,33 +240,149 @@ public class ProjectParser {
         json.put("_parent", getRef(parentId));
 
         setReference(json);
-        setAggregation(json);
+        setRelation();
         return json;
     }
 
-    private void setAggregation(JSONObject umlModel) {
+    private void setRelation() {
+        setGeneralization();
+        setRealization();
+        setAggregation();
+    }
 
+    private void setGeneralization() {
+        for (Duo<String, String> duo: generalizations) {
+            String name1 = duo.getX();
+            String name2 = duo.getY();
+            JSONObject class1 = nameToJson.get(name1);
+            JSONObject class2 = nameToJson.get(name2);
+            if (class1 == null || class2 == null) {
+                continue;
+            }
+            JSONObject obj = new JSONObject();
+            obj.put("_type", "UMLGeneralization");
+            obj.put("_parent", getRef(class1.getString("_id")));
+            obj.put("_id", allocId());
+            obj.put("source", getRef(class1.getString("_id")));
+            obj.put("target", getRef(class2.getString("_id")));
+            addOwnedElements(class1, obj);
+        }
+    }
+
+    private void setRealization() {
+        for (Duo<String, String> duo: realizations) {
+            String name1 = duo.getX();
+            String name2 = duo.getY();
+            JSONObject class1 = nameToJson.get(name1);
+            JSONObject class2 = nameToJson.get(name2);
+            if (class1 == null || class2 == null) {
+                continue;
+            }
+            JSONObject obj = new JSONObject();
+            obj.put("_type", "UMLRealization");
+            obj.put("_parent", getRef(class1.getString("_id")));
+            obj.put("_id", allocId());
+            obj.put("source", getRef(class1.getString("_id")));
+            obj.put("target", getRef(class2.getString("_id")));
+            addOwnedElements(class1, obj);
+        }
+    }
+
+    private void setAggregation() {
+        /**
+         *
+         "_type": "UMLAssociation",
+         "_id": "AAAAAAGP3p0ewvhy6wM=",
+         "_parent": {
+             "$ref": "286331176"
+         },
+         "end1": {
+             "_type": "UMLAssociationEnd",
+             "_id": "AAAAAAGP3p0ewvhzGlM=",
+             "_parent": {
+                 "$ref": "AAAAAAGP3p0ewvhy6wM="
+             },
+             "reference": {
+                "$ref": "286331176"
+             }
+         },
+         "end2": {
+             "_type": "UMLAssociationEnd",
+             "_id": "AAAAAAGP3p0ewvh0DoI=",
+             "_parent": {
+                "$ref": "AAAAAAGP3p0ewvhy6wM="
+             },
+             "reference": {
+                 "$ref": "286331212"
+             },
+             "aggregation": "shared"
+         }
+         */
+        for (Duo<String, String> duo: aggregations) {
+            String name1 = duo.getX();
+            String name2 = duo.getY();
+            JSONObject class1 = nameToJson.get(name1);
+            JSONObject class2 = nameToJson.get(name2);
+            if (class1 == null || class2 == null) {
+                continue;
+            }
+            JSONObject obj = new JSONObject();
+            obj.put("_type", "UMLAssociation");
+            obj.put("_parent", getRef(class1.getString("_id")));
+            String objId = allocId();
+            obj.put("_id", objId);
+
+            JSONObject end1 = new JSONObject();
+            end1.put("_type", "UMLAssociationEnd");
+            end1.put("_parent", getRef(objId));
+            end1.put("_id", allocId());
+            end1.put("reference", getRef(class1.getString("_id")));
+            obj.put("end1", end1);
+
+            JSONObject end2 = new JSONObject();
+            end2.put("_type", "UMLAssociationEnd");
+            end2.put("_parent", getRef(objId));
+            end2.put("_id", allocId());
+            end2.put("reference", getRef(class2.getString("_id")));
+            end2.put("aggregation", "shared");
+            obj.put("end2", end2);
+
+            addOwnedElements(class1, obj);
+        }
+    }
+
+    private void addOwnedElements(JSONObject classJson, JSONObject element) {
+        if (!classJson.has("ownedElements")) {
+            classJson.put("ownedElements", new JSONArray());
+        }
+        ((JSONArray) classJson.get("ownedElements")).put(element);
     }
 
     private void setReference(JSONObject umlModel) {
         // turn every "type: ..." "" into a reference if there are any.
-        if (umlModel.has("type")) {
-            String name = (String) umlModel.get("type");
-            String id = nameToId.get(name);
-            umlModel.put("type", getRef(id));
-        }
-        if (umlModel.has("source")) {
-            String name = (String) umlModel.get("source");
-            String id = nameToId.get(name);
-            umlModel.put("source", getRef(id));
-        }
-        if (umlModel.has("target")) {
-            String name = (String) umlModel.get("target");
-            String id = nameToId.get(name);
-            umlModel.put("target", getRef(id));
-        }
         for (String key: umlModel.keySet()) {
-            if (umlModel.get(key) instanceof JSONObject) {
+            if (key.equals("type")) {
+                String name = (String) umlModel.get("type");
+                String id = nameToId.get(name);
+                if (id != null) {
+                    umlModel.put("type", getRef(id));
+                }
+            }
+            else if (key.equals("source")) {
+                String name = (String) umlModel.get("source");
+                String id = nameToId.get(name);
+                if (id != null) {
+                    umlModel.put("source", getRef(id));
+                }
+            }
+            else if (key.equals("target")) {
+                String name = (String) umlModel.get("target");
+                String id = nameToId.get(name);
+                if (id != null) {
+                    umlModel.put("target", getRef(id));
+                }
+            }
+            else if (umlModel.get(key) instanceof JSONObject) {
                 setReference((JSONObject) umlModel.get(key));
             }
             else if (umlModel.get(key) instanceof JSONArray) {
@@ -297,7 +424,7 @@ public class ProjectParser {
         JSONObject json = new JSONObject();
         String id = allocId();
         nameToId.put(ci.getNameAsString(), id);
-        idToName.put(id, ci.getNameAsString());
+        nameToJson.put(ci.getNameAsString(), json);
 
         // basic definition
         if (ci.isInterface()) {
@@ -316,7 +443,7 @@ public class ProjectParser {
         // operations and attributes
         for (int i = 0; i < ci.getMembers().size(); i++) {
             if (ci.getMember(i) instanceof FieldDeclaration) {
-                attrs.put(getUmlAttribute((FieldDeclaration) ci.getMember(i), id));
+                attrs.put(getUmlAttribute((FieldDeclaration) ci.getMember(i), ci.getNameAsString(), id));
             }
             else if (ci.getMember(i) instanceof MethodDeclaration) {
                 ops.put(getUmlOperation((MethodDeclaration) ci.getMember(i), id));
@@ -326,33 +453,18 @@ public class ProjectParser {
         json.put("attributes", attrs);
         json.put("operations", ops);
 
-        // generalization and realization
-        JSONArray ownedElements = new JSONArray();
+        // store generalization and realization
         for (ClassOrInterfaceType node: ci.getImplementedTypes()) {
-            JSONObject obj = new JSONObject();
-            obj.put("_type", "UMLInterfaceRealization");
-            obj.put("_id", allocId());
-            obj.put("_parent", getRef(id));
-            obj.put("source", ci.getNameAsString());
-            obj.put("target", node.getNameAsString());
-            ownedElements.put(obj);
+            realizations.add(new Duo<>(ci.getNameAsString(), node.getNameAsString()));
         }
         for (ClassOrInterfaceType  node: ci.getExtendedTypes()) {
-            JSONObject obj = new JSONObject();
-            obj.put("_type", "UMLGeneralization");
-            obj.put("_id", allocId());
-            obj.put("_parent", getRef(id));
-            obj.put("source", ci.getNameAsString());
-            obj.put("target", node.getNameAsString());
-            ownedElements.put(obj);
+            generalizations.add(new Duo<>(ci.getNameAsString(), node.getNameAsString()));
         }
-
-        json.put("ownedElements", ownedElements);
 
         return json;
     }
 
-    public JSONObject getUmlAttribute(FieldDeclaration dec, String parentId) {
+    public JSONObject getUmlAttribute(FieldDeclaration dec, String classOrInterfaceName, String parentId) {
         JSONObject json = new JSONObject();
         String id = allocId();
         json.put("_type", "UMLAttribute");
@@ -362,8 +474,25 @@ public class ProjectParser {
 
         setModifier(json, dec.getModifiers());
 
-        json.put("type", dec.getVariable(0).getTypeAsString());
+        if (!(dec.getVariable(0).getType() instanceof PrimitiveType)) {
+            ClassOrInterfaceType _type = ((ClassOrInterfaceType) dec.getVariable(0).getType());
+            json.put("type", _type.toString());
+            // store aggregations
+            storeAggregation(classOrInterfaceName, _type);
+        }
+
         return json;
+    }
+
+    private void storeAggregation(String classOrInterfaceName, ClassOrInterfaceType type) {
+        String name = type.getNameAsString();
+        aggregations.add(new Duo<>(name, classOrInterfaceName));
+        if (type.getTypeArguments().isPresent()) {
+            for (Type t: type.getTypeArguments().get()) {
+                storeAggregation(classOrInterfaceName, (ClassOrInterfaceType) t);
+            }
+        }
+
     }
 
     public JSONObject getUmlOperation(MethodDeclaration dec, String parentId) {
@@ -397,6 +526,8 @@ public class ProjectParser {
             }
         }
 
+        // get sendMessage annotation
+
         return json;
     }
 
@@ -405,11 +536,11 @@ public class ProjectParser {
         String from = ((StringLiteralExpr) pairs.get(0).getValue()).getValue();
         if (pairs.get(1).getValue() instanceof StringLiteralExpr) {
             String to = ((StringLiteralExpr) pairs.get(1).getValue()).getValue();
-            triggers.add(new Trible(from, to, methodName + "()"));
+            triggers.add(new Trio(from, to, methodName + "()"));
         } else if (pairs.get(1).getValue() instanceof ArrayInitializerExpr) {
             for (Node _node : ((ArrayInitializerExpr) pairs.get(1).getValue()).getValues()) {
                 String to = ((StringLiteralExpr) _node).getValue();
-                triggers.add(new Trible(from, to, methodName + "()"));
+                triggers.add(new Trio(from, to, methodName + "()"));
             }
 
         }
@@ -423,22 +554,22 @@ public class ProjectParser {
     }
 
     private void setModifier(JSONObject json, NodeList<Modifier> modifiers) {
-        for (Modifier modifier: modifiers) {
-            switch (modifier.toString()) {
-                case "private":
-                    json.put("visibility", "private");
-                    break;
-                case "protected":
-                    json.put("visibility", "protected");
-                    break;
-                case "public":
-                    json.put("visibility", "public");
-                    break;
-                case "static":
-                    json.put("isStatic", true);
-                    break;
-                case "abstract":
-                    json.put("isAbstract", true);
+        for (Modifier _modifier: modifiers) {
+            String modifier = _modifier.toString();
+            if (modifier.startsWith("private")) {
+                json.put("visibility", "private");
+            }
+            else if (modifier.startsWith("protected")) {
+                json.put("visibility", "protected");
+            }
+            else if (modifier.startsWith("public")) {
+                json.put("visibility", "public");
+            }
+            else if (modifier.startsWith("static")) {
+                json.put("isStatic", true);
+            }
+            else if (modifier.startsWith("abstract")) {
+                json.put("isAbstract", true);
             }
         }
     }
@@ -471,39 +602,62 @@ public class ProjectParser {
         return (_id++).toString();
     }
 
-    private class Trible {
-        public Object x;
-        public Object y;
-        public Object z;
+    private class Duo<X, Y> {
+        public X x;
+        public Y y;
 
-        public Trible(Object x, Object y, Object z) {
+        public Duo(X x, Y y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        @Override
+        public boolean equals(Object object) {
+            if (!(object instanceof Duo)) {
+                return false;
+            }
+            Duo obj = (Duo) object;
+            return x.equals(obj.x) && y.equals(obj.y);
+        }
+
+        public X getX() {
+            return x;
+        }
+
+        public Y getY() {
+            return y;
+        }
+    }
+
+    private class Trio<X, Y, Z> {
+        public X x;
+        public Y y;
+        public Z z;
+
+        public Trio(X x, Y y, Z z) {
             this.x = x;
             this.y = y;
             this.z = z;
         }
 
-        public Trible() {
-
-        }
-
         @Override
         public boolean equals(Object object) {
-            if (!(object instanceof Trible)) {
+            if (!(object instanceof Trio)) {
                 return false;
             }
-            Trible obj = (Trible) object;
+            Trio obj = (Trio) object;
             return x.equals(obj.x) && y.equals(obj.y) && z.equals(obj.z);
         }
 
-        public Object getX() {
+        public X getX() {
             return x;
         }
 
-        public Object getY() {
+        public Y getY() {
             return y;
         }
 
-        public Object getZ() {
+        public Z getZ() {
             return z;
         }
 
