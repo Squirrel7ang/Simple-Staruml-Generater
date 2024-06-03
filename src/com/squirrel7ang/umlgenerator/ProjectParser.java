@@ -13,9 +13,6 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.oocourse.library2.Trigger;
-import com.oocourse.library2.Triggers;
-import jdk.nashorn.internal.runtime.JSONFunctions;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -230,7 +227,52 @@ public class ProjectParser {
         json.put("_id", id);
         json.put("_type", "UMLModel");
         json.put("_parent", getRef(parentId));
+
+        setReference(json);
+        setAggregation(json);
         return json;
+    }
+
+    private void setAggregation(JSONObject umlModel) {
+
+    }
+
+    private void setReference(JSONObject umlModel) {
+        // turn every "type: ..." "" into a reference if there are any.
+        if (umlModel.has("type")) {
+            String name = (String) umlModel.get("type");
+            String id = nameToId.get(name);
+            umlModel.put("type", getRef(id));
+        }
+        if (umlModel.has("source")) {
+            String name = (String) umlModel.get("source");
+            String id = nameToId.get(name);
+            umlModel.put("source", getRef(id));
+        }
+        if (umlModel.has("target")) {
+            String name = (String) umlModel.get("target");
+            String id = nameToId.get(name);
+            umlModel.put("target", getRef(id));
+        }
+        for (String key: umlModel.keySet()) {
+            if (umlModel.get(key) instanceof JSONObject) {
+                setReference((JSONObject) umlModel.get(key));
+            }
+            else if (umlModel.get(key) instanceof JSONArray) {
+                setReference((JSONArray) umlModel.get(key));
+            }
+        }
+    }
+
+    private void setReference(JSONArray json) {
+        for (Object obj: json) {
+            if (obj instanceof JSONObject) {
+                setReference((JSONObject) obj);
+            }
+            else if (obj instanceof JSONArray) {
+                setReference((JSONArray) obj);
+            }
+        }
     }
 
     private JSONObject getRef(String id) {
@@ -295,15 +337,17 @@ public class ProjectParser {
             obj.put("target", node.getNameAsString());
             ownedElements.put(obj);
         }
-        for (Node node: ci.getExtendedTypes()) {
+        for (ClassOrInterfaceType  node: ci.getExtendedTypes()) {
             JSONObject obj = new JSONObject();
             obj.put("_type", "UMLGeneralization");
             obj.put("_id", allocId());
             obj.put("_parent", getRef(id));
             obj.put("source", ci.getNameAsString());
-            obj.put("target", ((ClassOrInterfaceDeclaration) node).getNameAsString());
+            obj.put("target", node.getNameAsString());
             ownedElements.put(obj);
         }
+
+        json.put("ownedElements", ownedElements);
 
         return json;
     }
@@ -314,11 +358,11 @@ public class ProjectParser {
         json.put("_type", "UMLAttribute");
         json.put("_id", id);
         json.put("_parent", getRef(parentId));
-        json.put("name", dec.getVariable(0).getName());
+        json.put("name", dec.getVariable(0).getNameAsString());
 
         setModifier(json, dec.getModifiers());
 
-        json.put("type", dec.getVariable(0).getType());
+        json.put("type", dec.getVariable(0).getTypeAsString());
         return json;
     }
 
@@ -346,28 +390,36 @@ public class ProjectParser {
         // get Trigger annotation
         for (AnnotationExpr anno: dec.getAnnotations()) {
             if (anno.getNameAsString().equals("Trigger")) {
-                NodeList<MemberValuePair> pairs = ((NormalAnnotationExpr) anno).getPairs();
-                String from = ((StringLiteralExpr) pairs.get(0).getValue()).getValue();
-                if (pairs.get(1).getValue() instanceof StringLiteralExpr) {
-                    String to = ((StringLiteralExpr) pairs.get(1).getValue()).getValue();
-                    triggers.add(new Trible(from, to, dec.getNameAsString() + "()"));
-                }
-                else if (pairs.get(1).getValue() instanceof ArrayInitializerExpr) {
-                    for (Node _node: ((ArrayInitializerExpr) pairs.get(1).getValue()).getValues()) {
-                        String to = ((StringLiteralExpr) _node).getValue();
-                        triggers.add(new Trible(from, to, dec.getNameAsString() + "()"));
-                    }
-
-                }
+                setTriggerAnnotation(dec.getNameAsString(), (NormalAnnotationExpr) anno);
             }
             else if (anno.getNameAsString().equals("Triggers")) {
-                for (Node node: anno.getChildNodes()) {
-                    // TODO
-                }
+                setTriggersAnnotation(dec.getNameAsString(), (NormalAnnotationExpr) anno);
             }
         }
 
         return json;
+    }
+
+    private void setTriggerAnnotation(String methodName, NormalAnnotationExpr anno) {
+        NodeList<MemberValuePair> pairs = anno.getPairs();
+        String from = ((StringLiteralExpr) pairs.get(0).getValue()).getValue();
+        if (pairs.get(1).getValue() instanceof StringLiteralExpr) {
+            String to = ((StringLiteralExpr) pairs.get(1).getValue()).getValue();
+            triggers.add(new Trible(from, to, methodName + "()"));
+        } else if (pairs.get(1).getValue() instanceof ArrayInitializerExpr) {
+            for (Node _node : ((ArrayInitializerExpr) pairs.get(1).getValue()).getValues()) {
+                String to = ((StringLiteralExpr) _node).getValue();
+                triggers.add(new Trible(from, to, methodName + "()"));
+            }
+
+        }
+    }
+
+    private void setTriggersAnnotation(String methodName, NormalAnnotationExpr anno) {
+        NodeList<MemberValuePair> pairs = anno.getPairs();
+        for (Node node: ((ArrayInitializerExpr) pairs.get(0).getValue()).getValues()) {
+            setTriggerAnnotation(methodName, (NormalAnnotationExpr) node);
+        }
     }
 
     private void setModifier(JSONObject json, NodeList<Modifier> modifiers) {
@@ -418,8 +470,6 @@ public class ProjectParser {
     public static String allocId() {
         return (_id++).toString();
     }
-
-    private static Integer _nameId = 1;
 
     private class Trible {
         public Object x;
