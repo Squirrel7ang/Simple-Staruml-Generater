@@ -5,11 +5,17 @@ import com.github.javaparser.ast.*;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.oocourse.library2.Trigger;
+import com.oocourse.library2.Triggers;
+import jdk.nashorn.internal.runtime.JSONFunctions;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -18,16 +24,25 @@ public class ProjectParser {
     private final ArrayList<File> javaSourceFiles = new ArrayList<>();
     private final ArrayList<CompilationUnit> asts = new ArrayList<>();
     private final ArrayList<ClassOrInterfaceDeclaration> classOrInterfaces = new ArrayList<>();
+    private final HashMap<String, String> nameToId;
+    private final HashMap<String, String> idToName;
+    private final ArrayList<Trible> triggers;
 
     public ProjectParser(String path) {
         File file = new File(path);
         srcDir = file;
+        nameToId = new HashMap<>();
+        idToName = new HashMap<>();
+        triggers = new ArrayList<>();
         walk(file);
         convertToJp();
     }
 
     public ProjectParser(File file) {
         srcDir = file;
+        nameToId = new HashMap<>();
+        idToName = new HashMap<>();
+        triggers = new ArrayList<>();
         walk(file);
         convertToJp();
     }
@@ -84,12 +99,119 @@ public class ProjectParser {
         JSONObject json = new JSONObject();
         String id = allocId();
 
-        json.put("ownedElements", new JSONArray());
-        ((JSONArray) json.get("ownedElements")).put(getUmlModel(id));
+        JSONArray ownedElements = new JSONArray();
+        ownedElements.put(getUmlModel(id));
+        ownedElements.put(getUmlStateMachine(id));
+        json.put("ownedElements", ownedElements);
 
-        json.put("name", "projectName");
+        json.put("name", "uml");
         json.put("_id", id);
         json.put("_type", "Project");
+        return json;
+    }
+
+    private JSONObject getUmlStateMachine(String parentId) {
+        JSONObject json = new JSONObject();
+        String id = allocId();
+
+        json.put("name", "StateMachine1");
+        json.put("_id", id);
+        json.put("_type", "UMLStateMachine");
+        json.put("_parent", getRef(parentId));
+
+        JSONArray ownedElements = new JSONArray();
+        ownedElements.put(getStatechartDiagram(id));
+        JSONArray regions = new JSONArray();
+        regions.put(getUmlRegion(id));
+
+        json.put("ownedElements", ownedElements);
+        json.put("regions", regions);
+
+        return json;
+    }
+
+    private JSONObject getUmlRegion(String parentId) {
+        JSONObject json = new JSONObject();
+        String id = allocId();
+
+        json.put("_id", id);
+        json.put("_type", "UMLRegion");
+        json.put("_parent", getRef(parentId));
+
+
+        JSONArray vertices = new JSONArray();
+        JSONArray transitions = new JSONArray();
+        HashMap<String, String> map = new HashMap<>(); // from nodeName to id;
+        for (Trible tri: triggers) {
+            String from = (String) tri.getX();
+            String to = (String) tri.getY();
+            String methodName = (String) tri.getZ();
+
+            if (!map.containsKey(from)) {
+                String vertexId = allocId();
+                map.put(from, vertexId);
+                JSONObject obj = new JSONObject();
+                obj.put("name", from);
+                obj.put("_id", vertexId);
+                obj.put("_type", "UMLState");
+                obj.put("_parent", getRef(id));
+                vertices.put(obj);
+            }
+            if (!map.containsKey(to)) {
+                String vertexId = allocId();
+                map.put(to, vertexId);
+                JSONObject obj = new JSONObject();
+                obj.put("name", to);
+                obj.put("_id", vertexId);
+                obj.put("_type", "UMLState");
+                obj.put("_parent", getRef(id));
+                vertices.put(obj);
+            }
+            JSONObject transition = new JSONObject();
+            String tranId = allocId();
+            transition.put("name", to);
+            transition.put("_id", tranId);
+            transition.put("_type", "UMLTransition");
+            transition.put("_parent", getRef(id));
+
+            transition.put("source", getRef(map.get(from)));
+            transition.put("target", getRef(map.get(to)));
+
+            JSONArray trigs = new JSONArray();
+            trigs.put(getUmlEvent(tranId, methodName));
+
+            transition.put("triggers", trigs);
+
+            transitions.put(transition);
+        }
+
+        json.put("vertices", vertices);
+        json.put("transitions", transitions);
+
+        return json;
+    }
+
+    private JSONObject getUmlEvent(String parentId, String methodName) {
+        JSONObject json = new JSONObject();
+        String id = allocId();
+
+        json.put("name", methodName);
+        json.put("_id", id);
+        json.put("_type", "UMLEvent");
+        json.put("_parent", getRef(parentId));
+
+        return json;
+    }
+
+    private JSONObject getStatechartDiagram(String parentId) {
+        JSONObject json = new JSONObject();
+        String id = allocId();
+
+        json.put("name", "StatechartDiagram1");
+        json.put("_id", id);
+        json.put("_type", "UMLStatechartDiagram");
+        json.put("_parent", getRef(parentId));
+
         return json;
     }
 
@@ -132,6 +254,10 @@ public class ProjectParser {
     private JSONObject getUmlClass(String parentId, ClassOrInterfaceDeclaration ci) {
         JSONObject json = new JSONObject();
         String id = allocId();
+        nameToId.put(ci.getNameAsString(), id);
+        idToName.put(id, ci.getNameAsString());
+
+        // basic definition
         if (ci.isInterface()) {
             json.put("_type", "UMLInterface");
         }
@@ -145,6 +271,7 @@ public class ProjectParser {
         JSONArray attrs = new JSONArray();
         JSONArray ops = new JSONArray();
 
+        // operations and attributes
         for (int i = 0; i < ci.getMembers().size(); i++) {
             if (ci.getMember(i) instanceof FieldDeclaration) {
                 attrs.put(getUmlAttribute((FieldDeclaration) ci.getMember(i), id));
@@ -157,6 +284,27 @@ public class ProjectParser {
         json.put("attributes", attrs);
         json.put("operations", ops);
 
+        // generalization and realization
+        JSONArray ownedElements = new JSONArray();
+        for (ClassOrInterfaceType node: ci.getImplementedTypes()) {
+            JSONObject obj = new JSONObject();
+            obj.put("_type", "UMLInterfaceRealization");
+            obj.put("_id", allocId());
+            obj.put("_parent", getRef(id));
+            obj.put("source", ci.getNameAsString());
+            obj.put("target", node.getNameAsString());
+            ownedElements.put(obj);
+        }
+        for (Node node: ci.getExtendedTypes()) {
+            JSONObject obj = new JSONObject();
+            obj.put("_type", "UMLGeneralization");
+            obj.put("_id", allocId());
+            obj.put("_parent", getRef(id));
+            obj.put("source", ci.getNameAsString());
+            obj.put("target", ((ClassOrInterfaceDeclaration) node).getNameAsString());
+            ownedElements.put(obj);
+        }
+
         return json;
     }
 
@@ -166,17 +314,10 @@ public class ProjectParser {
         json.put("_type", "UMLAttribute");
         json.put("_id", id);
         json.put("_parent", getRef(parentId));
-        json.put("name", dec.getVariable(0));
-        for (Modifier mf: dec.getModifiers()) {
-            if (mf.toString().startsWith("private")) {
-                json.put("visibility", "private");
-                break;
-            }
-            else if (mf.toString().startsWith("public")) {
-                json.put("visibility", "public");
-                break;
-            }
-        }
+        json.put("name", dec.getVariable(0).getName());
+
+        setModifier(json, dec.getModifiers());
+
         json.put("type", dec.getVariable(0).getType());
         return json;
     }
@@ -184,11 +325,14 @@ public class ProjectParser {
     public JSONObject getUmlOperation(MethodDeclaration dec, String parentId) {
         JSONObject json = new JSONObject();
         String id = allocId();
+
+        // set the basics
         json.put("_type", "UMLOperation");
         json.put("_id", id);
         json.put("_parent", getRef(parentId));
-        json.put("name", dec.getName().toString());
+        json.put("name", dec.getNameAsString());
 
+        // get parameters
         JSONArray paras = new JSONArray();
         paras.put(getUmlReturnParameter(dec, id));
         for (Parameter para: dec.getParameters()) {
@@ -196,7 +340,55 @@ public class ProjectParser {
         }
         json.put("parameters", paras);
 
+        // set modifier of this operation
+        setModifier(json, dec.getModifiers());
+
+        // get Trigger annotation
+        for (AnnotationExpr anno: dec.getAnnotations()) {
+            if (anno.getNameAsString().equals("Trigger")) {
+                NodeList<MemberValuePair> pairs = ((NormalAnnotationExpr) anno).getPairs();
+                String from = ((StringLiteralExpr) pairs.get(0).getValue()).getValue();
+                if (pairs.get(1).getValue() instanceof StringLiteralExpr) {
+                    String to = ((StringLiteralExpr) pairs.get(1).getValue()).getValue();
+                    triggers.add(new Trible(from, to, dec.getNameAsString() + "()"));
+                }
+                else if (pairs.get(1).getValue() instanceof ArrayInitializerExpr) {
+                    for (Node _node: ((ArrayInitializerExpr) pairs.get(1).getValue()).getValues()) {
+                        String to = ((StringLiteralExpr) _node).getValue();
+                        triggers.add(new Trible(from, to, dec.getNameAsString() + "()"));
+                    }
+
+                }
+            }
+            else if (anno.getNameAsString().equals("Triggers")) {
+                for (Node node: anno.getChildNodes()) {
+                    // TODO
+                }
+            }
+        }
+
         return json;
+    }
+
+    private void setModifier(JSONObject json, NodeList<Modifier> modifiers) {
+        for (Modifier modifier: modifiers) {
+            switch (modifier.toString()) {
+                case "private":
+                    json.put("visibility", "private");
+                    break;
+                case "protected":
+                    json.put("visibility", "protected");
+                    break;
+                case "public":
+                    json.put("visibility", "public");
+                    break;
+                case "static":
+                    json.put("isStatic", true);
+                    break;
+                case "abstract":
+                    json.put("isAbstract", true);
+            }
+        }
     }
 
     public JSONObject getUmlReturnParameter(MethodDeclaration dec, String parentId) {
@@ -225,5 +417,45 @@ public class ProjectParser {
     private static Integer _id = 0x11111111;
     public static String allocId() {
         return (_id++).toString();
+    }
+
+    private static Integer _nameId = 1;
+
+    private class Trible {
+        public Object x;
+        public Object y;
+        public Object z;
+
+        public Trible(Object x, Object y, Object z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        public Trible() {
+
+        }
+
+        @Override
+        public boolean equals(Object object) {
+            if (!(object instanceof Trible)) {
+                return false;
+            }
+            Trible obj = (Trible) object;
+            return x.equals(obj.x) && y.equals(obj.y) && z.equals(obj.z);
+        }
+
+        public Object getX() {
+            return x;
+        }
+
+        public Object getY() {
+            return y;
+        }
+
+        public Object getZ() {
+            return z;
+        }
+
     }
 }

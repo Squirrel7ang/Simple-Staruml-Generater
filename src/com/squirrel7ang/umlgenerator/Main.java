@@ -13,6 +13,7 @@ public class Main {
             dir = new File(args[0]);
         }
         else if (args.length == 2) {
+            dir = new File(args[0]);
             outputPath = args[1];
             if (outputPath.endsWith("/") || outputPath.endsWith("\\")) {
                 outputPath += "uml.mdj";
