@@ -1,8 +1,8 @@
 ## What is this?
 
-this is a simple staruml generator build for BUAA OO Unit-4
-in order to avoid stupid typing mistakes during mid-tests. 
-It can generate staruml file based on java source file.
+this is a simple staruml generator build for BUAA OO Unit-4in order to avoid stupid 
+typing mistakes during mid-tests. It can generate staruml file based on java source 
+file.
 
 this project is based on [JavaParser](https://github.com/javaparser/javaparser) and org.JSON, and import them with Maven.
 
@@ -49,3 +49,29 @@ you can also download Release at the [release](https://github.com/Squirrel7ang/S
 > 3. How to use InitState and FinalState. 
 
 just change the name of the state into "InitState" or "FinalState" will do. 
+
+> 4. unable to identify Trigger and Triggers?
+
+umlgenerator only support the Trigger and Triggers annotation that is written in 
+key-value form. For example, your annotation should be like this:
+
+```java
+public class Library {
+    @Trigger(from = "State1", to = {"State2", "State3"})
+    @Trigger(from = "State2", to = "State3")
+    public void method1() {
+        
+    }
+    
+    @Triggers(value = {
+        @Trigger(from = "State2", to = "State3"),
+        @Trigger(from = "State3", to = {"State2", "State1"})
+    })
+    public void method2() {
+        
+    }
+}
+```
+
+Also, the oocourse's TAs also suggest don't use `Triggers` and `SendMessages` 
+annotation directly.

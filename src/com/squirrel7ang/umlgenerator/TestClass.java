@@ -1,5 +1,6 @@
 package com.squirrel7ang.umlgenerator;
 
+import com.oocourse.library3.annotation.SendMessage;
 import com.oocourse.library3.annotation.Trigger;
 import com.oocourse.library3.annotation.Triggers;
 
@@ -22,10 +23,7 @@ public class TestClass {
         }
     }
 
-    @Triggers(value = {
-        @Trigger(from = "false", to = "true"),
-        @Trigger(from = "InitState", to = {"state1", "state2"})
-    })
+    @SendMessage(from = "sender", to = "receiver")
     private boolean setFalse() {
         if (privateMember) {
             privateMember = false;

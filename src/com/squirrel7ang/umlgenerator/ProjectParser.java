@@ -19,17 +19,19 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class ProjectParser {
-    private File srcDir;
+    private final File srcDir;
     private final ArrayList<File> javaSourceFiles = new ArrayList<>();
     private final ArrayList<CompilationUnit> asts = new ArrayList<>();
     private final ArrayList<ClassOrInterfaceDeclaration> classOrInterfaces = new ArrayList<>();
     private final HashMap<String, String> nameToId; // from the Name of a class or interface to its id of its JSONObject
     private final HashMap<String, JSONObject> nameToJson; // from the name of a class or interface to its JSONObject
-    private final HashMap<String, String> StateNameToId = new HashMap<>(); // from stateName to the id of the UMLState JSONObject;
+    private final HashMap<String, String> stateNameToId = new HashMap<>(); // from stateName to the id of the UMLState JSONObject;
+    private final HashMap<String, String> lifelineNameToId = new HashMap<>(); // from stateName to the id of the UMLState JSONObject;
     private final ArrayList<Duo<String, String>> generalizations;
     private final ArrayList<Duo<String, String>> realizations;
     private final ArrayList<Duo<String, String>> aggregations;
     private final ArrayList<Trio<String, String, String>> triggers;
+    private final ArrayList<Trio<String, String, String>> sendMessages;
 
     public ProjectParser(String path) {
         File file = new File(path);
@@ -40,6 +42,7 @@ public class ProjectParser {
         realizations = new ArrayList<>();
         aggregations = new ArrayList<>();
         triggers = new ArrayList<>();
+        sendMessages = new ArrayList<>();
         walk(file);
         convertToJp();
     }
@@ -52,6 +55,7 @@ public class ProjectParser {
         realizations = new ArrayList<>();
         aggregations = new ArrayList<>();
         triggers = new ArrayList<>();
+        sendMessages = new ArrayList<>();
         walk(file);
         convertToJp();
     }
@@ -111,11 +115,100 @@ public class ProjectParser {
         JSONArray ownedElements = new JSONArray();
         ownedElements.put(getUmlModel(id));
         ownedElements.put(getUmlStateMachine(id));
+        ownedElements.put(getUmlCollaboration(id));
         json.put("ownedElements", ownedElements);
 
         json.put("name", "uml");
         json.put("_id", id);
         json.put("_type", "Project");
+        return json;
+    }
+
+    private JSONObject getUmlCollaboration(String parentId) {
+        JSONObject json = new JSONObject();
+        String id = allocId();
+
+        json.put("name", "Collaboration1");
+        json.put("_id", id);
+        json.put("_type", "UMLCollaboration");
+        json.put("_parent", getRef(parentId));
+
+        JSONArray ownedElements = new JSONArray();
+        ownedElements.put(getUmlInteraction(id));
+        json.put("ownedElements", ownedElements);
+
+        return json;
+    }
+
+    private JSONObject getUmlInteraction(String parentId) {
+        JSONObject json = new JSONObject();
+        String id = allocId();
+
+        json.put("name", "Interaction1");
+        json.put("_id", id);
+        json.put("_type", "UMLInteraction");
+        json.put("_parent", getRef(parentId));
+
+        JSONArray ownedElements = new JSONArray();
+        ownedElements.put(getSequenceDiagram(id));
+        json.put("ownedElements", ownedElements);
+
+        JSONArray messages = new JSONArray();
+        JSONArray participants = new JSONArray();
+        for (Trio<String, String, String> tri: sendMessages) {
+            String from = tri.getX();
+            String to = tri.getY();
+            String methodName = tri.getZ();
+
+            // add participants(lifeline) if necessary
+            if (!lifelineNameToId.containsKey(from)) {
+                participants.put(getUmlLifeline(id, from));
+            }
+            if (!lifelineNameToId.containsKey(to)) {
+                participants.put(getUmlLifeline(id, to));
+            }
+
+            // add message
+            JSONObject message = new JSONObject();
+            String messageId = allocId();
+            message.put("name", methodName);
+            message.put("_id", messageId);
+            message.put("_type", "UMLMessage");
+            message.put("_parent", getRef(id));
+
+            message.put("source", getRef(lifelineNameToId.get(from)));
+            message.put("target", getRef(lifelineNameToId.get(to)));
+
+            messages.put(message);
+        }
+
+        json.put("messages", messages);
+        json.put("participants", participants);
+
+        return json;
+    }
+
+    private JSONObject getUmlLifeline(String parentId, String lifelineName) {
+        String lifelineId = allocId();
+        lifelineNameToId.put(lifelineName, lifelineId);
+        JSONObject obj = new JSONObject();
+        obj.put("name", lifelineName);
+        obj.put("_id", lifelineId);
+        obj.put("_parent", getRef(parentId));
+        obj.put("_type", "UMLLifeline");
+        obj.put("isMultiInstance", false);
+        return obj;
+    }
+
+    private JSONObject getSequenceDiagram(String parentId) {
+        JSONObject json = new JSONObject();
+        String id = allocId();
+
+        json.put("name", "SequenceDiagram1");
+        json.put("_id", id);
+        json.put("_type", "UMLSequenceDiagram");
+        json.put("_parent", getRef(parentId));
+
         return json;
     }
 
@@ -150,29 +243,29 @@ public class ProjectParser {
 
         JSONArray vertices = new JSONArray();
         JSONArray transitions = new JSONArray();
-        for (Trio tri: triggers) {
-            String from = (String) tri.getX();
-            String to = (String) tri.getY();
-            String methodName = (String) tri.getZ();
+        for (Trio<String, String, String> tri: triggers) {
+            String from = tri.getX();
+            String to = tri.getY();
+            String methodName = tri.getZ();
 
             // add vertices if necessary
-            if (!StateNameToId.containsKey(from)) {
+            if (!stateNameToId.containsKey(from)) {
                 vertices.put(getUmlState(id, from));
             }
-            if (!StateNameToId.containsKey(to)) {
+            if (!stateNameToId.containsKey(to)) {
                 vertices.put(getUmlState(id, to));
             }
 
             // add Transition
             JSONObject transition = new JSONObject();
             String tranId = allocId();
-            transition.put("name", to);
+            transition.put("name", methodName);
             transition.put("_id", tranId);
             transition.put("_type", "UMLTransition");
             transition.put("_parent", getRef(id));
 
-            transition.put("source", getRef(StateNameToId.get(from)));
-            transition.put("target", getRef(StateNameToId.get(to)));
+            transition.put("source", getRef(stateNameToId.get(from)));
+            transition.put("target", getRef(stateNameToId.get(to)));
 
             JSONArray trigs = new JSONArray();
             trigs.put(getUmlEvent(tranId, methodName));
@@ -190,7 +283,7 @@ public class ProjectParser {
 
     private JSONObject getUmlState(String parentId, String stateName) {
         String vertexId = allocId();
-        StateNameToId.put(stateName, vertexId);
+        stateNameToId.put(stateName, vertexId);
         JSONObject obj = new JSONObject();
         obj.put("name", stateName);
         obj.put("_id", vertexId);
@@ -299,35 +392,6 @@ public class ProjectParser {
     }
 
     private void setAggregation() {
-        /**
-         *
-         "_type": "UMLAssociation",
-         "_id": "AAAAAAGP3p0ewvhy6wM=",
-         "_parent": {
-             "$ref": "286331176"
-         },
-         "end1": {
-             "_type": "UMLAssociationEnd",
-             "_id": "AAAAAAGP3p0ewvhzGlM=",
-             "_parent": {
-                 "$ref": "AAAAAAGP3p0ewvhy6wM="
-             },
-             "reference": {
-                "$ref": "286331176"
-             }
-         },
-         "end2": {
-             "_type": "UMLAssociationEnd",
-             "_id": "AAAAAAGP3p0ewvh0DoI=",
-             "_parent": {
-                "$ref": "AAAAAAGP3p0ewvhy6wM="
-             },
-             "reference": {
-                 "$ref": "286331212"
-             },
-             "aggregation": "shared"
-         }
-         */
         for (Duo<String, String> duo: aggregations) {
             String name1 = duo.getX();
             String name2 = duo.getY();
@@ -526,19 +590,44 @@ public class ProjectParser {
         // set modifier of this operation
         setModifier(json, dec.getModifiers());
 
-        // get Trigger annotation
         for (AnnotationExpr anno: dec.getAnnotations()) {
+            // get Trigger annotation
             if (anno.getNameAsString().equals("Trigger")) {
                 setTriggerAnnotation(dec.getNameAsString(), (NormalAnnotationExpr) anno);
             }
             else if (anno.getNameAsString().equals("Triggers")) {
                 setTriggersAnnotation(dec.getNameAsString(), (NormalAnnotationExpr) anno);
             }
+            // get sendMessage annotation
+            else if (anno.getNameAsString().equals("SendMessage")) {
+                setSendMessageAnnotation(dec.getNameAsString(), (NormalAnnotationExpr) anno);
+            }
+            else if (anno.getNameAsString().equals("SendMessages")) {
+                setSendMessageAnnotations(dec.getNameAsString(), (NormalAnnotationExpr) anno);
+            }
         }
-
-        // get sendMessage annotation
-
         return json;
+    }
+
+    private void setSendMessageAnnotation(String methodName, NormalAnnotationExpr anno) {
+        NodeList<MemberValuePair> pairs = anno.getPairs();
+        String from = ((StringLiteralExpr) pairs.get(0).getValue()).getValue();
+        if (pairs.get(1).getValue() instanceof StringLiteralExpr) {
+            String to = ((StringLiteralExpr) pairs.get(1).getValue()).getValue();
+            sendMessages.add(new Trio<>(from, to, methodName + "()"));
+        } else if (pairs.get(1).getValue() instanceof ArrayInitializerExpr) {
+            for (Node _node : ((ArrayInitializerExpr) pairs.get(1).getValue()).getValues()) {
+                String to = ((StringLiteralExpr) _node).getValue();
+                sendMessages.add(new Trio<>(from, to, methodName + "()"));
+            }
+        }
+    }
+
+    private void setSendMessageAnnotations(String methodName, NormalAnnotationExpr anno) {
+        NodeList<MemberValuePair> pairs = anno.getPairs();
+        for (Node node: ((ArrayInitializerExpr) pairs.get(0).getValue()).getValues()) {
+            setTriggerAnnotation(methodName, (NormalAnnotationExpr) node);
+        }
     }
 
     private void setTriggerAnnotation(String methodName, NormalAnnotationExpr anno) {
@@ -546,13 +635,12 @@ public class ProjectParser {
         String from = ((StringLiteralExpr) pairs.get(0).getValue()).getValue();
         if (pairs.get(1).getValue() instanceof StringLiteralExpr) {
             String to = ((StringLiteralExpr) pairs.get(1).getValue()).getValue();
-            triggers.add(new Trio(from, to, methodName + "()"));
+            triggers.add(new Trio<>(from, to, methodName + "()"));
         } else if (pairs.get(1).getValue() instanceof ArrayInitializerExpr) {
             for (Node _node : ((ArrayInitializerExpr) pairs.get(1).getValue()).getValues()) {
                 String to = ((StringLiteralExpr) _node).getValue();
-                triggers.add(new Trio(from, to, methodName + "()"));
+                triggers.add(new Trio<>(from, to, methodName + "()"));
             }
-
         }
     }
 
