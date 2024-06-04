@@ -6,16 +6,22 @@ It can generate staruml file based on java source file.
 
 this project is based on [JavaParser](https://github.com/javaparser/javaparser) and org.JSON, and import them with Maven.
 
+## Version Info
+
+updated to v1.1
+
 ## Feature Supported
 
 - class diagrams
+- Statechart diagram
 - class and interface declaration
 - attributes and operations of class or declaration and their basic modifier.
+- Realization, Generalization and Aggregation relationships are supported.
+- better Modifier
 
 the following feature is not yet supported
-- relation between class.
 - enumerable declaration.
-- other uml diagrams besides class diagram
+- sequence diagram support
 
 ## Usage
 
@@ -23,14 +29,20 @@ just build it and run Main.main.
 
 ## FAQ
 
-1. where's the diagram?
+> 1. where's the diagram? I see a blank sheet.
 
-you will need to drag them from the frame on the left to your workspace, 
+You will need to drag them from the frame on the left explorer to your workspace, 
 and design on your own. This project only meant to avoid making stupid
 typing mistakes. 
 
-2. New to Maven?
+As for state chart and other chart, you will need to double-click on them on the
+explorer on your left, and choose the diagram you want to design by double-clicking
+them on the left.
 
-you can also download Release at [release](https://github.com/Squirrel7ang/Simple-Staruml-Generater/releases)
+> 2. New to Maven?
+
+***Notice: the release is only updated to v1.0.***
+
+you can also download Release at the [release](https://github.com/Squirrel7ang/Simple-Staruml-Generater/releases) page. 
 
 
