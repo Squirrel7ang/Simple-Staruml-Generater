@@ -18,6 +18,7 @@ updated to v1.1
 - attributes and operations of class or declaration and their basic modifier.
 - Realization, Generalization and Aggregation relationships are supported.
 - better Modifier
+- InitState and FinalState supported. 
 
 the following feature is not yet supported
 - enumerable declaration.
@@ -45,4 +46,6 @@ them on the left.
 
 you can also download Release at the [release](https://github.com/Squirrel7ang/Simple-Staruml-Generater/releases) page. 
 
+> 3. How to use InitState and FinalState. 
 
+just change the name of the state into "InitState" or "FinalState" will do. 

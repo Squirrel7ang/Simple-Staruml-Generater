@@ -23,8 +23,9 @@ public class ProjectParser {
     private final ArrayList<File> javaSourceFiles = new ArrayList<>();
     private final ArrayList<CompilationUnit> asts = new ArrayList<>();
     private final ArrayList<ClassOrInterfaceDeclaration> classOrInterfaces = new ArrayList<>();
-    private final HashMap<String, String> nameToId;
-    private final HashMap<String, JSONObject> nameToJson;
+    private final HashMap<String, String> nameToId; // from the Name of a class or interface to its id of its JSONObject
+    private final HashMap<String, JSONObject> nameToJson; // from the name of a class or interface to its JSONObject
+    private final HashMap<String, String> StateNameToId = new HashMap<>(); // from stateName to the id of the UMLState JSONObject;
     private final ArrayList<Duo<String, String>> generalizations;
     private final ArrayList<Duo<String, String>> realizations;
     private final ArrayList<Duo<String, String>> aggregations;
@@ -149,32 +150,20 @@ public class ProjectParser {
 
         JSONArray vertices = new JSONArray();
         JSONArray transitions = new JSONArray();
-        HashMap<String, String> map = new HashMap<>(); // from nodeName to id;
         for (Trio tri: triggers) {
             String from = (String) tri.getX();
             String to = (String) tri.getY();
             String methodName = (String) tri.getZ();
 
-            if (!map.containsKey(from)) {
-                String vertexId = allocId();
-                map.put(from, vertexId);
-                JSONObject obj = new JSONObject();
-                obj.put("name", from);
-                obj.put("_id", vertexId);
-                obj.put("_type", "UMLState");
-                obj.put("_parent", getRef(id));
-                vertices.put(obj);
+            // add vertices if necessary
+            if (!StateNameToId.containsKey(from)) {
+                vertices.put(getUmlState(id, from));
             }
-            if (!map.containsKey(to)) {
-                String vertexId = allocId();
-                map.put(to, vertexId);
-                JSONObject obj = new JSONObject();
-                obj.put("name", to);
-                obj.put("_id", vertexId);
-                obj.put("_type", "UMLState");
-                obj.put("_parent", getRef(id));
-                vertices.put(obj);
+            if (!StateNameToId.containsKey(to)) {
+                vertices.put(getUmlState(id, to));
             }
+
+            // add Transition
             JSONObject transition = new JSONObject();
             String tranId = allocId();
             transition.put("name", to);
@@ -182,8 +171,8 @@ public class ProjectParser {
             transition.put("_type", "UMLTransition");
             transition.put("_parent", getRef(id));
 
-            transition.put("source", getRef(map.get(from)));
-            transition.put("target", getRef(map.get(to)));
+            transition.put("source", getRef(StateNameToId.get(from)));
+            transition.put("target", getRef(StateNameToId.get(to)));
 
             JSONArray trigs = new JSONArray();
             trigs.put(getUmlEvent(tranId, methodName));
@@ -197,6 +186,27 @@ public class ProjectParser {
         json.put("transitions", transitions);
 
         return json;
+    }
+
+    private JSONObject getUmlState(String parentId, String stateName) {
+        String vertexId = allocId();
+        StateNameToId.put(stateName, vertexId);
+        JSONObject obj = new JSONObject();
+        obj.put("name", stateName);
+        obj.put("_id", vertexId);
+        obj.put("_parent", getRef(parentId));
+        if (stateName.equals("InitState")) {
+            obj.put("_type", "UMLPseudostate");
+            obj.put("kind", "initial");
+        }
+        else if (stateName.equals("FinalState")) {
+            obj.put("_type", "UMLFinalState");
+
+        }
+        else {
+            obj.put("_type", "UMLState");
+        }
+        return obj;
     }
 
     private JSONObject getUmlEvent(String parentId, String methodName) {

@@ -1,7 +1,7 @@
 package com.squirrel7ang.umlgenerator;
 
-import com.oocourse.library3.Trigger;
-import com.oocourse.library3.Triggers;
+import com.oocourse.library3.annotation.Trigger;
+import com.oocourse.library3.annotation.Triggers;
 
 public class TestClass {
     private Boolean privateMember;
