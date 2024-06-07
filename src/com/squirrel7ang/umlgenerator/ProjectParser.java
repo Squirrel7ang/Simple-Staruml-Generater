@@ -114,8 +114,12 @@ public class ProjectParser {
 
         JSONArray ownedElements = new JSONArray();
         ownedElements.put(getUmlModel(id));
-        ownedElements.put(getUmlStateMachine(id));
-        ownedElements.put(getUmlCollaboration(id));
+        if (!triggers.isEmpty()) {
+            ownedElements.put(getUmlStateMachine(id));
+        }
+        if (!sendMessages.isEmpty()) {
+            ownedElements.put(getUmlCollaboration(id));
+        }
         json.put("ownedElements", ownedElements);
 
         json.put("name", "uml");
@@ -548,9 +552,10 @@ public class ProjectParser {
 
         setModifier(json, dec.getModifiers());
 
-        if (!(dec.getVariable(0).getType() instanceof PrimitiveType)) {
+        json.put("type", dec.getVariable(0).getType().toString());
+
+        if (dec.getVariable(0).getType() instanceof ClassOrInterfaceType) {
             ClassOrInterfaceType _type = ((ClassOrInterfaceType) dec.getVariable(0).getType());
-            json.put("type", _type.toString());
             // store aggregations
             storeAggregation(classOrInterfaceName, _type);
         }

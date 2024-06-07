@@ -75,3 +75,14 @@ public class Library {
 
 Also, the oocourse's TAs also suggest don't use `Triggers` and `SendMessages` 
 annotation directly.
+
+> 5. The `uml.mdj` file look ugly. Is there a way to reformat it?
+
+Unfortunately, no. However, there is a simple way: open it with StarUML and save the file.
+
+> 6. I cannot still cannot pass the test.
+
+Check whether you have deleted the diagrams that represents official java source file. 
+The package that the course offers doesn't need to be in the graph. 
+
+You can also import course's package through the jar file they've offered.
