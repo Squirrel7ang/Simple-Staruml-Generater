@@ -15,6 +15,7 @@ import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.VoidType;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -95,6 +96,11 @@ public class ProjectParser {
                 System.err.println("File " + f.toString() + " not found");
                 continue;
             }
+            if (cu.getPackageDeclaration().isPresent()) {
+                if (cu.getPackageDeclaration().get().getNameAsString().startsWith("com.oocourse")) {
+                    continue;
+                }
+            }
             asts.add(cu);
             for (Node ci: cu.getChildNodes()) {
                 if (ci instanceof ClassOrInterfaceDeclaration) {
@@ -117,9 +123,11 @@ public class ProjectParser {
         if (!triggers.isEmpty()) {
             ownedElements.put(getUmlStateMachine(id));
         }
+        /*
         if (!sendMessages.isEmpty()) {
             ownedElements.put(getUmlCollaboration(id));
         }
+         */
         json.put("ownedElements", ownedElements);
 
         json.put("name", "uml");
