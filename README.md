@@ -1,6 +1,6 @@
 ## What is this?
 
-this is a simple staruml generator build for BUAA OO Unit-4in order to avoid stupid 
+this is a simple staruml generator build for BUAA OO Unit-4 in order to avoid stupid 
 typing mistakes during mid-tests. It can generate staruml file based on java source 
 file.
 
@@ -19,10 +19,12 @@ updated to v1.1
 - Realization, Generalization and Aggregation relationships are supported.
 - better Modifier
 - InitState and FinalState supported. 
+- remove java source in package `com.oocourse`.
 
 the following feature is not yet supported
-- enumerable declaration.
+- enumerable declaration. (because most people just don't have them in U4)
 - sequence diagram support
+- private class.
 
 ## Usage
 
@@ -41,8 +43,6 @@ explorer on your left, and choose the diagram you want to design by double-click
 them on the left.
 
 > 2. New to Maven?
-
-***Notice: the release is only updated to v1.0.***
 
 you can also download Release at the [release](https://github.com/Squirrel7ang/Simple-Staruml-Generater/releases) page. 
 
@@ -73,7 +73,7 @@ public class Library {
 }
 ```
 
-Also, the oocourse's TAs also suggest don't use `Triggers` and `SendMessages` 
+Also, the oocourse's TAs also suggest don't use `Triggers`
 annotation directly.
 
 > 5. The `uml.mdj` file look ugly. Is there a way to reformat it?
@@ -82,7 +82,5 @@ Unfortunately, no. However, there is a simple way: open it with StarUML and save
 
 > 6. I cannot still cannot pass the test.
 
-Check whether you have deleted the diagrams that represents official java source file. 
-The package that the course offers doesn't need to be in the graph. 
-
-You can also import course's package through the jar file they've offered.
+version 1.2 remove sendMessage support, because it cannot be done through `sendMessage`
+annotation. You have to draw it on your own. Good luck. 
